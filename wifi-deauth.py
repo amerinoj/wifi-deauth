@@ -40,8 +40,8 @@ class Interceptor:
         self._scan_intv = 0.1
         self._deauth_intv = 0.1
         self._printf_res_intv = 1
-        self.csize=80  # screen columsize
-        self._ssid_str_pad = 42  # total len 42
+        self.csize=64  # screen columsize
+        self._ssid_str_pad = 35  # total len 42
         self.stop_threads=False
         self._current_channel_num = None
         self._current_channel_aps = set()
@@ -348,17 +348,19 @@ class Interceptor:
 	                    elapse = int (get_time() - start)
 	                    print_info(f"Net interface{self.interface.rjust(self.csize - 17, ' ')}")
 	                    print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(self.csize - 21, ' ')}{RESET}")
-	                    print_info(f"Elapsed sec {BOLD}{str(elapse).rjust(self.csize - 16, ' ')}{RESET}")
+	                    print_info(f"Elapsed sec {BOLD}{str(elapse).rjust(self.csize - 16, ' ')}{RESET}", end="\r")
 	                    sleep(self._printf_res_intv)
-	                    print_info(f"\033[3A", end="\r") 
-	                    print_info(f"            {str('        ').rjust(self.csize - 8, ' ')}") 
-	                    print_info(f"            {str('        ').rjust(self.csize - 8, ' ')}")
-	                    print_info(f"            {str('        ').rjust(self.csize - 8, ' ')}")                       
-	                    print_info(f"\033[3A", end="\r") 
+ 
+	                    clear_line(3)
+	                    print_info(f"            {str('        ').rjust(self.csize - 12, ' ')}") 
+	                    print_info(f"            {str('        ').rjust(self.csize - 12, ' ')}")
+	                    print_info(f"            {str('        ').rjust(self.csize - 12, ' ')}", end="\r")        
+	                    clear_line(3)               
+
 	                 
 	
 	                clear_line(1)
-	                print_info(f"\033[1A", end="\r")                
+	                print_info(f"\33[1A", end="\r")                
 	                print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(self.csize - 21, ' ')}{RESET}")
 
 	                self.stop_threads=True            
