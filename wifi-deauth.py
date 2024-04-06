@@ -343,7 +343,7 @@ class Interceptor:
 	
 	                start = get_time()
 	                elapse = 0
-	                printf(f"{DELIM}")                
+	                printf(f"{DELIM}\n")                
 	                while elapse <= self.client_time_to_wait and not Interceptor._ABORT :
 	                    elapse = int (get_time() - start)
 	                    print_info(f"Net interface{self.interface.rjust(self.csize - 17, ' ')}")
@@ -351,7 +351,7 @@ class Interceptor:
 	                    print_info(f"Elapsed sec {BOLD}{str(elapse).rjust(self.csize - 16, ' ')}{RESET}", end="\r")
 	                    sleep(self._printf_res_intv)
  
-	                    clear_line(3)
+	                    clear_line(3) 
 	                    print_info(f"            {str('        ').rjust(self.csize - 12, ' ')}") 
 	                    print_info(f"            {str('        ').rjust(self.csize - 12, ' ')}")
 	                    print_info(f"            {str('        ').rjust(self.csize - 12, ' ')}", end="\r")        
@@ -359,7 +359,7 @@ class Interceptor:
 
 	                 
 	
-	                clear_line(1)
+	                clear_line(2)
 	                print_info(f"\33[1A", end="\r")                
 	                print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(self.csize - 21, ' ')}{RESET}")
 
