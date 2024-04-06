@@ -4,7 +4,7 @@ import sys
 _DEVNULL = open(os.devnull, "w")
 _ORIG_STDOUT = sys.stdout
 _CLEAR_LINE = "\x1b[1A\x1b[2K"
-DELIM = 80 * "="
+DELIM = 69 * "="
 
 RESET = '\033[0m'
 BOLD = '\033[1m'
@@ -52,9 +52,9 @@ def print_cmd(text):
 
 
 BANNER = f"""
-{BOLD}{RED} __      __ {RESET}__  _____ __         {BOLD}{RED}_________{RESET}                         __   __     
-{BOLD}{RED}/  \    /  \\{RESET}__|/ ____\__|        {BOLD}{RED}\    __  \\{RESET}  _____ ______   __ ___/  |_|  |__  
-{BOLD}{RED}\   \/\/   /{RESET}  \   __\|  |  ______ {BOLD}{RED}|  |  \  \\{RESET}/ ___ \\\  __ \ |  |  \   __|  |  \ 
-{BOLD}{RED} \        /{RESET}|  ||  |  |  | /_____/ {BOLD}{RED}|  |__/  /{RESET}\  ___/| |__\ \|  |  /|  | |   Y  \\
-{BOLD}{RED}  \__/\__/ {RESET}|__||__|  |__|        {BOLD}{RED} |_______/{RESET}  \____/|______/ ____/ |__| |___|__/ 
+{BOLD}{RED}    _____   {RESET}          {BOLD}{RED} __      __ {RESET}        {BOLD}{RED}_________{RESET} 
+{BOLD}{RED}   /     \  {RESET}          {BOLD}{RED}/  \    /  \\{RESET}       {BOLD}{RED}\    __  \\{RESET} 
+{BOLD}{RED}  /  \ /  \ {RESET}  ______  {BOLD}{RED}\   \/\/   /{RESET} ______ {BOLD}{RED}|  |  \  \\{RESET}
+{BOLD}{RED} /    Y    \\{RESET} /_____/  {BOLD}{RED} \        /{RESET} /_____/ {BOLD}{RED}|  |__/  /{RESET}
+{BOLD}{RED} \____|____/ {RESET}         {BOLD}{RED}  \__/\__/ {RESET}         {BOLD}{RED}|_______/{RESET} 
 """
