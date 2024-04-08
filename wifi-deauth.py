@@ -45,7 +45,7 @@ class Interceptor:
         self.stop_threads=False
         self._current_channel_num = None
         self._current_channel_aps = set()
-
+        self.skip_monitor_mode_setup=skip_monitor_mode_setup
         self.attack_loop_count = 0
         
         self.target_map: Dict[int, SSID] = dict()
@@ -314,6 +314,21 @@ class Interceptor:
                         break
                         
                 print_info("No SSID Founds , try again")
+                if not self.skip_monitor_mode_setup:
+                    print_info(f"Setting up monitor mode...")
+                    if not self._enable_monitor_mode():
+                        print_error(f"Monitor mode was not enabled properly")
+                        raise Exception("Unable to turn on monitor mode")
+                    print_info(f"Monitor mode was set up successfully")
+                else:
+                    print_info(f"Skipping monitor mode setup...")
+
+                if self.killnetworkmanager:
+                    print_info(f"Killing NetworkManager...")
+                    if not self._kill_networkmanager():
+                        print_error(f"Failed to kill NetworkManager...")
+                sleep(1)
+                self._start_initial_ap_scan()
             except ValueError:
                 print_info("Index must be a number, try again")
                 
