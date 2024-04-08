@@ -237,7 +237,7 @@ class Interceptor:
 
     def _listen_for_clients(self):
         print_info(f"Setting up a listener for new clients...")
-        sniff(prn=self._clients_sniff_cb, iface=self.interface, stop_filter=lambda p: Interceptor._ABORT is True)
+        sniff(prn=self._clients_sniff_cb, iface=self.interface, stop_filter=lambda p: Interceptor._ABORT is True or self.stop_threads is True)
 
     def _read_bssid_to_exclude(self):
         try:
@@ -352,9 +352,11 @@ class Interceptor:
 	
 	
 	                self.stop_threads=False
+	                all_processes = []
 	                for action in [self._run_deauther, self._listen_for_clients]:
 	                    t = Thread(target=action, args=tuple(), daemon=True)
-	                    t.start() 
+	                    t.start()
+	                    all_processes.append(t)
 	
 	                start = get_time()
 	                elapse = 0
@@ -377,9 +379,11 @@ class Interceptor:
 	                clear_line(2)
 	                print_info(f"\33[1A", end="\r")                
 	                print_info(f"Confirmed clients{BOLD}{str(len(self.target_ssid.clients)).rjust(self.csize - 21, ' ')}{RESET}")
-
-	                self.stop_threads=True            
-	                t.join(timeout=1.0)
+	                
+	                self.stop_threads=True 
+	                for process in all_processes:
+	                    process.join(timeout=1.0)
+	                    
 	                printf(f"{DELIM}")
 
                 
@@ -442,7 +446,7 @@ if __name__ == "__main__":
                            file_bssid_exclude=pargs.file_bssid_exclude,
                            client_time_wait=pargs.client_time_wait,
                            n_deauth=pargs.n_deauth)
-
+                           	
     while  not Interceptor._ABORT :
         try:                 
             attacker.run()
