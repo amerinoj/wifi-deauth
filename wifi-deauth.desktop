@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Exec=bash -c "cd /home/kali/Desktop/wifi-deauth/ ; sudo python3 wifi-deauth.py -i wlan0  -e exclude_bssid.txt -k -t 10 -n 100"
+Name=Massive-Wifi-Deauth
+GenericName=Massive-Wifi-Deauth
+Comment=Deauthenticat wifi users
+Encoding=UTF-8
+Terminal=true
+Type=Application
+Categories=Application;Network;
