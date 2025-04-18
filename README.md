@@ -30,7 +30,7 @@ python3 wifi-deauth.py -i wlan0  -e exclude_bssid.txt -k -t 10 -n 100
 -t time of learning client mac addres
 -n number of the authentication packets
 ```
-# Bash script to running in backgroud.
+# Bash script to run in backgroud.
 ```bash
 #!/bin/sh
 echo Starting Massive-Wifi-Deauth
